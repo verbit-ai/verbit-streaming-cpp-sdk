@@ -6,6 +6,7 @@ endif
 
 TARGET := /usr/local
 OWNFLAGS := -o root -g root
+UBUNTU := bionic
 
 SRCNS := verbit/streaming
 SRCDIR := src/$(SRCNS)
@@ -106,7 +107,7 @@ debvars:
 	@echo DOCDIR=\"$(DOCDIR)\"
 
 package: $(ALIB) $(SOLIBV) $(DOCIDX)
-	scripts/build_package focal
+	scripts/build_package $(UBUNTU)
 
 clean:
 	rm -f $(BINDIR)/* $(OBJDIR)/* $(SRCDIR)/version.h $(TEST_BINDIR)/*
