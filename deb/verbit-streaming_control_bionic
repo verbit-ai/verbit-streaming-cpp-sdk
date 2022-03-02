@@ -1,0 +1,10 @@
+Package: verbit-streaming
+Version: 0.0.1-1+bionic
+Section: base
+Priority: optional
+Architecture: amd64
+Depends: libc6
+Maintainer: Brent J. Nordquist <brent.nordquist@vitac.com>
+Description: Verbit Streaming C++ SDK
+ This package is for Ubuntu 18.04 LTS (Bionic Beaver)
+ More information at https://github.com/verbit-ai/verbit-streaming-cpp-sdk

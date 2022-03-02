@@ -1,0 +1,13 @@
+#!/bin/sh
+
+run_test()
+{
+	$1 2>&1 | tee /tmp/cppunit$$
+	grep -q FAILURES /tmp/cppunit$$
+	if [ $? -eq 0 ]; then ex=1; fi
+	rm -f /tmp/cppunit$$
+}
+
+ex=0
+for t in test-bin/*_test; do run_test $t; done
+exit $ex

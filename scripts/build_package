@@ -1,0 +1,75 @@
+#!/bin/sh -e
+
+if [ "$1" = -f ]; then
+	FORCE=yes
+	shift
+fi
+if [ -z "$1" ]; then
+	echo "Usage: $0 [ -f ] [ bionic | focal ]" >&2
+	exit 64
+fi
+OSREL=$1
+
+D=deb
+make debvars | grep -v '^make' >/tmp/debvars$$
+. /tmp/debvars$$
+rm -f /tmp/debvars$$
+
+PKGNAME="`echo $LIBNAME | sed 's/_/-/g'`"
+SCRIPTS="triggers"
+if [ ! -d package ]; then
+	echo "$0: build directory 'package' missing" >&2
+	exit 66
+fi
+for f in "control_${OSREL}" $SCRIPTS; do
+	if [ ! -f $D/${PKGNAME}_$f ]; then
+		echo "$0: package file '$D/${PKGNAME}_$f' missing" >&2
+		exit 66
+	fi
+done
+CONTROL="$D/${PKGNAME}_control_${OSREL}"
+VERSION=`grep '^Version' $CONTROL 2>/dev/null | awk '{ print $2; }'`
+if [ -z "$VERSION" ]; then
+	echo "$0: 'Version:' not found in $CONTROL" >&2
+	exit 65
+elif [ "`echo $VERSION | sed \"s/-[0-9][0-9]*+$OSREL//\"`" != "$SWVER" ]; then
+	echo "$0: 'Version: $VERSION' in $CONTROL doesn't match base Makefile SWVER=$SWVER" >&2
+	exit 65
+fi
+PKGDIR="${PKGNAME}_${VERSION}"
+PKGPATH="package/$PKGDIR"
+if [ -d $PKGPATH ]; then
+	if [ -n "$FORCE" ]; then
+		rm -f $PKGPATH.deb
+		rm -rf $PKGPATH
+	else
+		echo "$0: version $VERSION already built; use '-f' to rebuild" >&2
+		exit 1
+	fi
+fi
+mkdir -p $PKGPATH/DEBIAN
+cp $CONTROL $PKGPATH/DEBIAN/control
+if [ -n "$SCRIPTS" ]; then
+	for f in $SCRIPTS; do
+		install -p -m 755 $D/${PKGNAME}_$f $PKGPATH/DEBIAN/$f
+	done
+fi
+mkdir -p $PKGPATH/usr/lib/x86_64-linux-gnu
+for x in $LIBS; do
+	install -p -m 755 $x $PKGPATH/usr/lib/x86_64-linux-gnu
+done
+mkdir -p $PKGPATH/usr/include/$SRCNS
+for x in $INCS; do
+	install -p -m 644 $x $PKGPATH/usr/include/$SRCNS
+done
+mkdir -p $PKGPATH/usr/share/doc/$LIBNAME/html/search
+for x in $DOCDIR/*.*; do
+	install -p -m 644 $x $PKGPATH/usr/share/doc/$LIBNAME/html
+done
+for x in $DOCDIR/search/*.*; do
+	install -p -m 644 $x $PKGPATH/usr/share/doc/$LIBNAME/html/search
+done
+(
+	cd ./package
+	fakeroot dpkg-deb -b $PKGDIR
+)

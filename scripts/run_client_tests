@@ -1,0 +1,63 @@
+#!/bin/sh
+
+TEST_SERVER=test-bin/test_server
+PIDFILE=/tmp/wss_test_server.pid
+OUTPUT=/tmp/test_server_out$$
+TEST_SERVER_BIN=/tmp/wss_test_server.bin
+
+start_test_server()
+{
+	if [ ! -x $TEST_SERVER ]; then
+		echo "$0: $TEST_SERVER not found or not executable" >&2
+		exit 69
+	fi
+	# TODO once test_server reads and checks for stale pid,
+	#      this test can go away:
+	PID="`cat $PIDFILE 2>/dev/null`"
+	if [ -n "$PID" ]; then
+		echo "$0: $TEST_SERVER already running" >&2
+		exit 69
+	fi
+	#
+	echo "starting $TEST_SERVER..."
+	rm -f $TEST_SERVER_BIN 2>/dev/null
+	$TEST_SERVER >$OUTPUT 2>&1 &
+	t_ex=$?
+	[ ! -f $PIDFILE ] && sleep 1
+	[ ! -f $PIDFILE ] && sleep 1
+	[ ! -f $PIDFILE ] && sleep 1
+	PID="`cat $PIDFILE 2>/dev/null`"
+	if [ $t_ex -ne 0 -o -z "$PID" ]; then
+		echo "$0: $TEST_SERVER failed to start" >&2
+		rm -f $OUTPUT 2>/dev/null
+		exit 70
+	fi
+}
+
+stop_test_server()
+{
+	echo "stopping $TEST_SERVER ($PID)..."
+	kill $PID
+	timeout 3 tail --pid $PID -f /dev/null
+	t_ex=$?
+	rm -f $OUTPUT 2>/dev/null
+	if [ $t_ex -ne 0 ]; then
+		echo "$0: $TEST_SERVER failed to stop" >&2
+		exit 70
+	fi
+}
+
+run_client_test()
+{
+	$1
+	t_ex=$?
+	if [ $t_ex -ne 0 ]; then ex=$t_ex; fi
+}
+
+ex=0
+start_test_server
+# the sleep is to wait for the server to clean up the previous connection
+# (the test server unfortunately can only handle one client at a time)
+for t in test-bin/*_test_c; do run_client_test $t; sleep 7; done
+stop_test_server
+exit $ex
