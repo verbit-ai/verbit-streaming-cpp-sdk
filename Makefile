@@ -22,6 +22,7 @@ LIBVER := $(LIBSO).0
 ALIB := $(OBJDIR)/lib$(LIBNAME).a
 SOLIBV := $(OBJDIR)/lib$(LIBNAME).so.$(LIBVER)
 SOLIB := lib$(LIBNAME).so.$(LIBSO)
+SOLINK := lib$(LIBNAME).so
 
 TESTDIR := test
 TEST_SRCS := $(wildcard $(TESTDIR)/*.cpp)
@@ -90,6 +91,7 @@ install: $(ALIB) $(SOLIBV)
 	install $(OWNFLAGS) -m 644 $(ALIB) $(TARGET)/lib/$(notdir $(ALIB))
 	install $(OWNFLAGS) -m 644 $(SOLIBV) $(TARGET)/lib/$(notdir $(SOLIBV))
 	ldconfig -n $(TARGET)/lib
+	( cd $(TARGET)/lib && ln -sf $(SOLIB) $(SOLINK) )
 	mkdir -p $(TARGET)/include/$(SRCNS)
 	install $(OWNFLAGS) -m 644 $(INCS) $(TARGET)/include/$(SRCNS)
 
@@ -102,6 +104,8 @@ debvars:
 	@echo LIBNAME=\"$(LIBNAME)\"
 	@echo SWVER=\"$(SWVER)\"
 	@echo LIBS=\"$(ALIB) $(SOLIBV)\"
+	@echo SONAME=\"$(SOLIB)\"
+	@echo SOLINK=\"$(SOLINK)\"
 	@echo SRCNS=\"$(SRCNS)\"
 	@echo INCS=\"$(INCS)\"
 	@echo DOCDIR=\"$(DOCDIR)\"

@@ -54,10 +54,15 @@ if [ -n "$SCRIPTS" ]; then
 		install -p -m 755 $D/${PKGNAME}_$f $PKGPATH/DEBIAN/$f
 	done
 fi
-mkdir -p $PKGPATH/usr/lib/x86_64-linux-gnu
+PKGLIBPATH=$PKGPATH/usr/lib/x86_64-linux-gnu
+mkdir -p $PKGLIBPATH
 for x in $LIBS; do
-	install -p -m 755 $x $PKGPATH/usr/lib/x86_64-linux-gnu
+	install -p -m 755 $x $PKGLIBPATH
 done
+(
+	cd $PKGLIBPATH
+	ln -sf $SONAME $SOLINK
+)
 mkdir -p $PKGPATH/usr/include/$SRCNS
 for x in $INCS; do
 	install -p -m 644 $x $PKGPATH/usr/include/$SRCNS
