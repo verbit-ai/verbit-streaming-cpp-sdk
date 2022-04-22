@@ -16,9 +16,9 @@ OBJDIR := obj
 OBJS := $(SRCS:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 BINDIR := bin
 LIBNAME := verbit_streaming
-SWVER := 0.0.1
-LIBSO := 0
-LIBVER := $(LIBSO).1
+SWVER := 1.0.0
+LIBSO := 1
+LIBVER := $(LIBSO).0
 ALIB := $(OBJDIR)/lib$(LIBNAME).a
 SOLIBV := $(OBJDIR)/lib$(LIBNAME).so.$(LIBVER)
 SOLIB := lib$(LIBNAME).so.$(LIBSO)

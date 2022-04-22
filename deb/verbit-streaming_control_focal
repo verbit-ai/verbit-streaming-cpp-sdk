@@ -1,5 +1,5 @@
 Package: verbit-streaming
-Version: 0.0.1-1+focal
+Version: 1.0.0-1+focal
 Section: base
 Priority: optional
 Architecture: amd64

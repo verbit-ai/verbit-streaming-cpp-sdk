@@ -40,7 +40,7 @@ public:
 	~WebSocketStreamingClient();
 
 	/// Return the WebSocket base URL.
-	constexpr std::string ws_url() { return _ws_url; }
+	const std::string ws_url() { return _ws_url; }
 
 	/// Set the WebSocket base URL.
 	void ws_url(const std::string ws_url) { _ws_url = ws_url; }
@@ -87,7 +87,7 @@ public:
 	constexpr int error_code() { return _error_code; }
 
 	/// Return the service-level error message.
-	constexpr std::string service_error() { return _service_error; }
+	const std::string service_error() { return _service_error; }
 
 	/// Start the WebSocket stream using the given media generator.
 	///
