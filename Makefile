@@ -11,7 +11,7 @@ UBUNTU := bionic
 SRCNS := verbit/streaming
 SRCDIR := src/$(SRCNS)
 SRCS := $(wildcard $(SRCDIR)/*.cpp)
-INCS := $(wildcard $(SRCDIR)/*.h) $(SRCDIR)/version.h
+INCS := $(filter-out ${SRCDIR}/version.h, $(wildcard $(SRCDIR)/*.h)) $(SRCDIR)/version.h
 OBJDIR := obj
 OBJS := $(SRCS:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 BINDIR := bin
