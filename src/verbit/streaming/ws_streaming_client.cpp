@@ -112,6 +112,11 @@ bool WebSocketStreamingClient::run_stream(MediaGenerator& media_generator, const
 	return (_error_code == 0);
 }
 
+#if defined(DEBUG)
+ssize_t wssc_bytes_sent = 0L;
+ssize_t wssc_report_at_bytes = 0L;
+#endif
+
 void WebSocketStreamingClient::run_media()
 {
 	// wait for WebSocket to be open
@@ -129,6 +134,17 @@ void WebSocketStreamingClient::run_media()
 		if (chunk.length() > 0) {
 			websocketpp::connection_hdl hdl = _ws_con->get_handle();
 			_ws_endpoint.send(hdl, chunk, websocketpp::frame::opcode::binary);
+#if defined(DEBUG)
+			wssc_bytes_sent += chunk.length();
+			if (wssc_bytes_sent > wssc_report_at_bytes) {
+				std::stringstream media_ss;
+				media_ss << "sent chunk " << chunk.length() << " bytes" <<
+					" get_buffered_amount() " << _ws_con->get_buffered_amount() <<
+					" have sent " << wssc_bytes_sent << " bytes" << std::endl;
+				write_alog("media", media_ss.str());
+				wssc_report_at_bytes += 500000L;
+			}
+#endif
 #if defined(VERBOSE_DEBUG)
 			std::stringstream media_ss;
 			media_ss << "sent chunk " << chunk.length() << " bytes" <<
@@ -149,6 +165,11 @@ void WebSocketStreamingClient::run_media()
 		std::string event_eos = "{\"event\":\"EOS\",\"payload\":{}}";
 		websocketpp::connection_hdl hdl = _ws_con->get_handle();
 		_ws_endpoint.send(hdl, event_eos, websocketpp::frame::opcode::text);
+#if defined(DEBUG)
+	} else {
+		std::string debug = std::string("exited loop without finish; state=") + _state.c_str();
+		write_alog("media", debug);
+#endif
 	}
 }
 
@@ -197,7 +218,7 @@ void WebSocketStreamingClient::on_fail(websocketpp::connection_hdl hdl)
 	_state.change_if(ServiceState::state_fail, ServiceState::state_opening, true);
 
 	wspp_client::connection_ptr con = _ws_endpoint.get_con_from_hdl(hdl);
-#if defined(VERBOSE_DEBUG)
+#if defined(DEBUG)
 	write_alog("on_fail state", std::to_string(con->get_state()));
 	websocketpp::lib::error_code ec = con->get_ec();
 	std::stringstream ec_ss;

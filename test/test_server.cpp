@@ -70,8 +70,13 @@ wspp_context_ptr on_tls_init(wspp_server* s, websocketpp::connection_hdl hdl)
 bool on_validate(wspp_server* s, websocketpp::connection_hdl hdl) {
 	wspp_server::connection_ptr con = s->get_con_from_hdl(hdl);
 	std::string auth_hdr(con->get_request_header("Authorization"));
-	std::cout << "on_validate called: Authorization: " << auth_hdr.substr(0, 10) << "... "
-		<< "(length=" << auth_hdr.length() << ")" << std::endl;
+	std::string sanitized_hdr = auth_hdr;
+	if (auth_hdr.length() >= 11) {
+		sanitized_hdr = auth_hdr.substr(0, 9) +
+			"[" + std::to_string(auth_hdr.length() - 11) + "]" +
+			auth_hdr.substr(auth_hdr.length() - 2, 2);
+	}
+	std::cout << "on_validate called: Authorization: " << sanitized_hdr << std::endl;
 	if (auth_hdr.length() < 40) {  // JWT tokens are long
 		con->set_status(websocketpp::http::status_code::unauthorized);
 		return false;
