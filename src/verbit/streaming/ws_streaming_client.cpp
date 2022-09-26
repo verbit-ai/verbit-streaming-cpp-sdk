@@ -49,6 +49,18 @@ WebSocketStreamingClient::~WebSocketStreamingClient()
 	}
 }
 
+const std::string WebSocketStreamingClient::ws_full_url()
+{
+	std::string url = _ws_url;
+	std::string sep = "?";
+	if (url.find('?') != std::string::npos) {
+		sep = "&";
+	}
+	url = url + sep + _media_config.url_params();
+	url = url + "&" + _response_types.url_params();
+	return url;
+}
+
 bool WebSocketStreamingClient::run_stream(MediaGenerator& media_generator)
 {
 	// construct with default `MediaConfig` and `ResponseType`

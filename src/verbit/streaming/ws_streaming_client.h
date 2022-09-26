@@ -45,6 +45,9 @@ public:
 	/// Set the WebSocket base URL.
 	void ws_url(const std::string ws_url) { _ws_url = ws_url; }
 
+	/// Return the WebSocket complete URL (with parameters).
+	const std::string ws_full_url();
+
 	/// Return the number of seconds to retry connecting to the WebSocket server before giving up.
 	/// Retry uses random exponential backoff.
 	constexpr double max_connection_retry_seconds() { return _max_conn_retry; }
@@ -120,12 +123,6 @@ private:
 	wspp_client::connection_ptr _ws_con = nullptr;
 	int _error_code;
 	std::string _service_error;
-
-	std::string ws_full_url()
-	{
-		return _ws_url + "?" + _media_config.url_params() +
-			"&" + _response_types.url_params();
-	}
 
 	void run_media();
 	void close_ws();
