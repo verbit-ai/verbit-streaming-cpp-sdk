@@ -1,5 +1,5 @@
 Package: verbit-streaming
-Version: 1.0.0-1+bionic
+Version: 1.0.1-1+bionic
 Section: base
 Priority: optional
 Architecture: amd64
