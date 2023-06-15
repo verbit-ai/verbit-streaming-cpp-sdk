@@ -153,12 +153,21 @@ std::string response_json(bool eos)
 	uuid_generate_random(uuid);
 	char* uuid_p = new char[256];
 	uuid_unparse(uuid, uuid_p);
+	std::string item_str = transcript.substr(0, transcript.length() - 1);
+	std::cerr << "item_str was <<" << item_str << ">>" << std::endl;
+	std::string space = std::string(" ");
+	std::size_t pos = 0;
+	while ((pos = item_str.find(space, 0)) != std::string::npos) {
+		item_str.replace(pos, space.length(), "\"},{\"value\":\"");
+	}
+	std::cerr << "item_str now <<" << item_str << ">>" << std::endl;
 	std::string json = std::string("{\"response\":{") +
 		"\"id\":\"" + uuid_p + "\"," +
 		"\"type\":\"captions\"," +
 		"\"is_final\":true,\"is_end_of_stream\":" + eos_s + "," +
 		"\"alternatives\":[{" +
-		"\"transcript\":\"" + transcript + "\"" +
+		"\"transcript\":\"" + transcript + "\"," +
+		"\"items\":[{\"value\":\"" + item_str + "\"}]" +
 		"}]}}";
 	delete uuid_p;
 	sent_resp_bytes = seen_bytes;
