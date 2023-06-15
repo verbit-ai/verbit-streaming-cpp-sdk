@@ -21,6 +21,22 @@ void ServiceStateTest::test_c_str()
 	CPPUNIT_ASSERT_MESSAGE("c_str opening", strcmp("opening", ss.c_str()) == 0);
 }
 
+void ServiceStateTest::test_is_final()
+{
+	ServiceState ss;
+	CPPUNIT_ASSERT_MESSAGE("is_final initial", !ss.is_final());
+	ss.change(ServiceState::state_opening);
+	CPPUNIT_ASSERT_MESSAGE("is_final opening", !ss.is_final());
+	ss.change(ServiceState::state_open);
+	CPPUNIT_ASSERT_MESSAGE("is_final open", !ss.is_final());
+	ss.change(ServiceState::state_closing);
+	CPPUNIT_ASSERT_MESSAGE("is_final closing", ss.is_final());
+	ss.change(ServiceState::state_done);
+	CPPUNIT_ASSERT_MESSAGE("is_final done", ss.is_final());
+	ss.change(ServiceState::state_fail);
+	CPPUNIT_ASSERT_MESSAGE("is_final fail", ss.is_final());
+}
+
 void ServiceStateTest::test_change()
 {
 	ServiceState ss;

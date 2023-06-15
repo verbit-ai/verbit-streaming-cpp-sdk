@@ -25,6 +25,9 @@ public:
 	/// Return the current service state as a C string.
 	const char* const c_str();
 
+	/// Is the current service state a final state?
+	constexpr bool is_final() { return (_state == state_closing) || (_state == state_done) || (_state == state_fail); }
+
 	/// Change state unconditionally.
 	///
 	/// \param state the state to change to

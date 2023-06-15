@@ -10,6 +10,7 @@ class ServiceStateTest : public CppUnit::TestFixture {
 
 	CPPUNIT_TEST(test_default_ctor);
 	CPPUNIT_TEST(test_c_str);
+	CPPUNIT_TEST(test_is_final);
 	CPPUNIT_TEST(test_change);
 	CPPUNIT_TEST(test_change_if);
 	CPPUNIT_TEST(test_change_if_except);
@@ -21,6 +22,7 @@ class ServiceStateTest : public CppUnit::TestFixture {
 public:
 	void test_default_ctor();
 	void test_c_str();
+	void test_is_final();
 	void test_change();
 	void test_change_if();
 	void test_change_if_except();
