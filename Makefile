@@ -158,6 +158,9 @@ $(TEST_BINDIR)/ws_streaming_client_test: obj/test_main.o obj/ws_streaming_client
 $(TEST_BINDIR)/empty_media_test_c: $(OBJDIR)/empty_media_test_c.o $(OBJDIR)/empty_media_generator.o $(ALIB)
 	g++ $(CXXFLAGS) -o $@ $^ $(TLSLIBS)
 
+$(TEST_BINDIR)/retry_media_test_c: $(OBJDIR)/retry_media_test_c.o $(OBJDIR)/empty_media_generator.o $(ALIB)
+	g++ $(CXXFLAGS) -o $@ $^ $(TLSLIBS)
+
 $(TEST_BINDIR)/short_media_test_c: $(OBJDIR)/short_media_test_c.o $(OBJDIR)/wav_media_generator.o $(ALIB)
 	g++ $(CXXFLAGS) -o $@ $^ $(TLSLIBS)
 
