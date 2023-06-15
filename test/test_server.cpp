@@ -85,7 +85,13 @@ bool on_validate(wspp_server* s, websocketpp::connection_hdl hdl) {
 }
 
 void on_open(wspp_server* s, websocketpp::connection_hdl hdl) {
-	std::cout << "on_open called" << std::endl;
+	wspp_server::connection_ptr con = s->get_con_from_hdl(hdl);
+	websocketpp::uri_ptr uri = con->get_uri();
+	std::cout << "on_open called, uri = " << uri->str() << std::endl;
+	std::string query = uri->get_query();
+	std::cout << "on_open query = " << query << std::endl;
+	std::string req_body = con->get_request_body();
+	std::cout << "on_open request_body = " << req_body << std::endl;
 	seen_bytes = 0;
 	sent_resp_bytes = 0;
 
