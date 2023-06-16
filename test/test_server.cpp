@@ -1,3 +1,4 @@
+#include <chrono>
 #include <iostream>
 #include <fstream>
 #include <fcntl.h>
@@ -12,6 +13,8 @@
 #include <websocketpp/config/asio.hpp>
 #include <websocketpp/server.hpp>
 
+#define LATENCY 250
+
 typedef websocketpp::server<websocketpp::config::asio_tls> wspp_server;
 typedef websocketpp::config::asio::message_type::ptr wspp_message_ptr;
 typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> wspp_context_ptr;
@@ -22,6 +25,7 @@ using websocketpp::lib::bind;
 
 // NOTE this breaks if more than one client connects to us simultaneously
 #define DUMP_FILENAME "/tmp/wss_test_server.bin"
+std::chrono::time_point<std::chrono::system_clock> media_start;
 size_t seen_bytes;
 size_t sent_resp_bytes;
 std::ofstream dump_file;
@@ -144,6 +148,43 @@ std::string _frame_type_str(websocketpp::frame::opcode::value opcode, bool compr
 	return opcode_type;
 }
 
+typedef std::vector<std::string> stringVector;
+
+stringVector tokenize(std::string line)
+{
+	stringVector tokens;
+	std::stringstream ss(line);
+	std::string token;
+	while (getline(ss, token, ' ')) {
+		tokens.push_back(token);
+	}
+	return tokens;
+}
+
+std::string response_items(std::string transcript)
+{
+	stringVector words = tokenize(transcript);
+	std::string r_items;
+	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now - media_start);
+	long tick = milliseconds.count() - LATENCY;
+	for (const std::string &word: words) {
+		if (!r_items.empty()) {
+			r_items += ",";
+		}
+		double start_t = ((double)tick) / 1000.0;
+		double end_t = ((double)tick + 7) / 1000.0;
+		r_items += (std::string("{\"value\":\"") + word + "\",");
+		char tstr[128];
+		sprintf(tstr, "%.3f", start_t);
+		r_items += (std::string("\"start\":") + tstr + ",");
+		sprintf(tstr, "%.3f", end_t);
+		r_items += (std::string("\"end\":") + tstr + "}");
+		tick += 20;
+	}
+	return r_items;
+}
+
 std::string response_json(bool eos)
 {
 	std::string transcript = std::string(eos ? "I saw " : "I've seen ") +
@@ -153,21 +194,14 @@ std::string response_json(bool eos)
 	uuid_generate_random(uuid);
 	char* uuid_p = new char[256];
 	uuid_unparse(uuid, uuid_p);
-	std::string item_str = transcript.substr(0, transcript.length() - 1);
-	std::cerr << "item_str was <<" << item_str << ">>" << std::endl;
-	std::string space = std::string(" ");
-	std::size_t pos = 0;
-	while ((pos = item_str.find(space, 0)) != std::string::npos) {
-		item_str.replace(pos, space.length(), "\"},{\"value\":\"");
-	}
-	std::cerr << "item_str now <<" << item_str << ">>" << std::endl;
+	std::string items = response_items(transcript.substr(0, transcript.length() - 1));
 	std::string json = std::string("{\"response\":{") +
 		"\"id\":\"" + uuid_p + "\"," +
 		"\"type\":\"captions\"," +
 		"\"is_final\":true,\"is_end_of_stream\":" + eos_s + "," +
 		"\"alternatives\":[{" +
 		"\"transcript\":\"" + transcript + "\"," +
-		"\"items\":[{\"value\":\"" + item_str + "\"}]" +
+		"\"items\":[" + items + "]" +
 		"}]}}";
 	delete uuid_p;
 	sent_resp_bytes = seen_bytes;
@@ -188,6 +222,9 @@ void on_message_text(wspp_server* s, websocketpp::connection_hdl hdl, wspp_serve
 }
 
 void on_message_binary(wspp_server* s, websocketpp::connection_hdl hdl, wspp_server::message_ptr msg) {
+	if (seen_bytes == 0) {
+		media_start = std::chrono::system_clock::now();
+	}
 	size_t payload_len = msg->get_payload().length();
 	seen_bytes += payload_len;
 #if defined(VERBOSE_DEBUG)
@@ -200,6 +237,8 @@ void on_message_binary(wspp_server* s, websocketpp::connection_hdl hdl, wspp_ser
 	}
 
 	if ((seen_bytes - sent_resp_bytes) >= 32000) {  // 1 sec
+		// simulate delay from producing captions:
+		std::this_thread::sleep_for(std::chrono::milliseconds(LATENCY));
 		try {
 			std::string json = response_json(false);
 			s->send(hdl, json, websocketpp::frame::opcode::text);
