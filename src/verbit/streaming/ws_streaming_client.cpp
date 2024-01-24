@@ -1,4 +1,5 @@
 #include <chrono>
+#include <fstream>
 
 #include "ws_streaming_client.h"
 
@@ -47,6 +48,60 @@ WebSocketStreamingClient::~WebSocketStreamingClient()
 		}
 		delete _media_thread;
 	}
+	// close any previously opened log files
+	if (_alog) {
+		delete(_alog);
+		_alog = nullptr;
+	}
+	if (_elog) {
+		delete(_elog);
+		_elog = nullptr;
+	}
+}
+
+void WebSocketStreamingClient::log_path(const std::string log_path) {
+	if (!log_path.empty()) {
+		std::string filename;
+		// close any previously opened log files
+		if (_alog) {
+			delete(_alog);
+			_alog = nullptr;
+		}
+		if (_elog) {
+			delete(_elog);
+			_elog = nullptr;
+		}
+
+		int num_start = 0;
+		char xbe_log_name[512];
+		struct stat sb;
+		// find the next filename that doesn't exist yet
+		do {
+			num_start++;
+			snprintf(xbe_log_name, 512, "%s/alog_%d", log_path.c_str(), num_start);
+		} while (::stat(xbe_log_name, &sb) == 0);
+
+		// open access log file
+		_alog = new std::ofstream(xbe_log_name);
+		if (_alog && _alog->is_open()) {
+			_ws_endpoint.get_alog().set_ostream(_alog);
+			_ws_endpoint.set_access_channels(websocketpp::log::alevel::all);
+#if !defined(VERBOSE_DEBUG)
+			_ws_endpoint.clear_access_channels(websocketpp::log::alevel::frame_payload);
+			_ws_endpoint.clear_access_channels(websocketpp::log::alevel::frame_header);
+#endif
+			_ws_endpoint.set_error_channels(websocketpp::log::elevel::all);
+			write_alog("WebSocketStreamingClient ver", WSSC_VERSION);
+		}
+
+		// open error log file
+		snprintf(xbe_log_name, 512, "%s/elog_%d", log_path.c_str(), num_start);
+		_elog = new std::ofstream(xbe_log_name);
+		if (_elog && _elog->is_open()) {
+			_ws_endpoint.get_elog().set_ostream(_elog);
+			_ws_endpoint.set_error_channels(websocketpp::log::elevel::all);
+		}
+	}
 }
 
 const std::string WebSocketStreamingClient::ws_full_url()
@@ -77,9 +132,8 @@ bool WebSocketStreamingClient::run_stream(MediaGenerator& media_generator, const
 	_media_generator = &media_generator;
 	_media_config = media_config;
 	_response_types = response_types;
-#if defined(DEBUG)
+
 	write_alog("ws_full_url", ws_full_url());
-#endif
 
 	// connect to the WebSocket server
 	_state.change(ServiceState::state_opening);
@@ -95,38 +149,34 @@ bool WebSocketStreamingClient::run_stream(MediaGenerator& media_generator, const
 	}
 	_ws_con->append_header("Authorization", std::string("Bearer ") + _access_token);
 	_ws_endpoint.connect(_ws_con);
-#if defined(DEBUG)
+
 	write_alog("WebSocket", "connected");
-#endif
 
 	// start media_generator thread
 	_media_thread = new std::thread(&WebSocketStreamingClient::run_media, this);
 
 	// start the ASIO io_service run loop: this doesn't return until the WebSocket closes
 	_ws_endpoint.run();
-#if defined(DEBUG)
+
 	std::string debug = std::string("run is finished; error_code=") + std::to_string(_error_code);
 	write_alog("media", debug);
-#endif
 
 	return (_error_code == 0);
 }
 
-#if defined(DEBUG)
-ssize_t wssc_bytes_sent = 0L;
-ssize_t wssc_report_at_bytes = 0L;
-#endif
 
 void WebSocketStreamingClient::run_media()
 {
+	static ssize_t wssc_bytes_sent = 0L;
+	static ssize_t wssc_report_at_bytes = 0L;
+
 	// wait for WebSocket to be open
 	while (_state.get() == ServiceState::state_opening) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
-#if defined(DEBUG)
+
 	std::string debug = std::string("finished opening; state=") + _state.c_str();
 	write_alog("WebSocket", debug);
-#endif
 
 	// start sending audio chunks
 	while (!_media_generator->finished() && (_state.get() == ServiceState::state_open)) {
@@ -134,7 +184,7 @@ void WebSocketStreamingClient::run_media()
 		if (chunk.length() > 0) {
 			websocketpp::connection_hdl hdl = _ws_con->get_handle();
 			_ws_endpoint.send(hdl, chunk, websocketpp::frame::opcode::binary);
-#if defined(DEBUG)
+
 			wssc_bytes_sent += chunk.length();
 			if (wssc_bytes_sent > wssc_report_at_bytes) {
 				std::stringstream media_ss;
@@ -144,7 +194,7 @@ void WebSocketStreamingClient::run_media()
 				write_alog("media", media_ss.str());
 				wssc_report_at_bytes += 500000L;
 			}
-#endif
+
 #if defined(VERBOSE_DEBUG)
 			std::stringstream media_ss;
 			media_ss << "sent chunk " << chunk.length() << " bytes" <<
@@ -155,9 +205,9 @@ void WebSocketStreamingClient::run_media()
 	}
 
 	if (_media_generator->finished()) {
-#if defined(DEBUG)
+
 		write_alog("media", "finished");
-#endif
+
 		_state.change_if(ServiceState::state_closing, ServiceState::state_open, false);
 		// the EOS (end of stream) message tells the service we are done
 		// sending media, and the order can be finalized; after this point
@@ -165,11 +215,9 @@ void WebSocketStreamingClient::run_media()
 		std::string event_eos = "{\"event\":\"EOS\",\"payload\":{}}";
 		websocketpp::connection_hdl hdl = _ws_con->get_handle();
 		_ws_endpoint.send(hdl, event_eos, websocketpp::frame::opcode::text);
-#if defined(DEBUG)
 	} else {
 		std::string debug = std::string("exited loop without finish; state=") + _state.c_str();
 		write_alog("media", debug);
-#endif
 	}
 }
 
@@ -180,6 +228,9 @@ void WebSocketStreamingClient::close_ws()
 	_ws_endpoint.close(hdl, websocketpp::close::status::going_away, "");
 }
 
+// NOTE: this method has no effect and does no logging unless
+// _ws_endpoint.set_access_channels() has been called in the constructor
+// or in the WebSocketStreamingClient::log_path() method.
 void WebSocketStreamingClient::write_alog(std::string tag, std::string message)
 {
 	std::string line;
@@ -218,7 +269,7 @@ void WebSocketStreamingClient::on_fail(websocketpp::connection_hdl hdl)
 	_state.change_if(ServiceState::state_fail, ServiceState::state_opening, true);
 
 	wspp_client::connection_ptr con = _ws_endpoint.get_con_from_hdl(hdl);
-#if defined(DEBUG)
+
 	write_alog("on_fail state", std::to_string(con->get_state()));
 	websocketpp::lib::error_code ec = con->get_ec();
 	std::stringstream ec_ss;
@@ -236,7 +287,6 @@ void WebSocketStreamingClient::on_fail(websocketpp::connection_hdl hdl)
 	write_alog("on_fail remote code", std::to_string(con->get_remote_close_code()));
 	write_alog("on_fail remote code", con->get_remote_close_reason());
 	write_alog("on_fail response message", con->get_response_msg());
-#endif
 
 	if (con->get_local_close_code() == 1006) {  // abnormal WS close
 		_error_code = 1006;
@@ -261,7 +311,10 @@ void WebSocketStreamingClient::on_open(websocketpp::connection_hdl hdl)
 	write_alog("WebSocket", debug);
 }
 
-#if defined(DEBUG)
+// anonymous namespace is used here to define translation-unit-local helper methods
+// without having to declare them elsewhere
+namespace {
+
 std::string _frame_type_str(websocketpp::frame::opcode::value opcode, bool compressed, bool fin)
 {
 	std::string opcode_type;
@@ -298,17 +351,16 @@ std::string _frame_type_str(websocketpp::frame::opcode::value opcode, bool compr
 	}
 	return opcode_type;
 }
-#endif
+
+} // anonymous namespace
 
 void WebSocketStreamingClient::on_message(websocketpp::connection_hdl hdl, wspp_message_ptr msg)
 {
-#if defined(DEBUG)
 	size_t payload_len = msg->get_payload().length();
 	std::string debug = std::string("on_message called:")
 		+ " frame_type " + _frame_type_str(msg->get_opcode(), msg->get_compressed(), msg->get_fin())
 		+ " payload_len " + std::to_string(payload_len);
 	write_alog("WebSocket", debug);
-#endif
 
 	// parse message JSON and deliver to handler
 	nlohmann::json message = nlohmann::json::parse(msg->get_payload());

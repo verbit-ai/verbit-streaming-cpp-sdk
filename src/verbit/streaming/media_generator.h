@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 namespace verbit {
 namespace streaming {
 
@@ -9,6 +11,8 @@ namespace streaming {
 class MediaGenerator
 {
 public:
+	virtual ~MediaGenerator() {}
+
 	/// Return the next chunk of media bytes.
 	///
 	/// The returned `string` is binary data.
