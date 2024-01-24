@@ -45,6 +45,11 @@ public:
 	/// Set the WebSocket base URL.
 	void ws_url(const std::string ws_url) { _ws_url = ws_url; }
 
+	/// Enable logging to file and set the log path.
+	/// If your client code does not call this method, you can still get logging
+	/// to std::cout/std::cerr by compiling with -DDEBUG
+	void log_path(const std::string log_path);
+
 	/// Return the WebSocket complete URL (with parameters).
 	const std::string ws_full_url();
 
@@ -110,6 +115,8 @@ public:
 
 private:
 	std::string _access_token;
+	std::ofstream *_alog = nullptr;
+	std::ofstream *_elog = nullptr;
 	std::string _ws_url;
 	double _max_conn_retry;
 	bool _verify_ssl_cert;
