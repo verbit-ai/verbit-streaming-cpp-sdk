@@ -29,6 +29,7 @@ void ServiceState::change(int state)
 {
 	std::unique_lock<std::mutex> mlock(_state_mutex);
 	_state = state;
+	_state_changed.notify_one();
 }
 
 void ServiceState::change_if(int state, int expected_state, bool throw_ex)
@@ -42,6 +43,7 @@ void ServiceState::change_if(int state, int expected_state, bool throw_ex)
 	}
 	if (_state == expected_state) {
 		_state = state;
+		_state_changed.notify_one();
 	}
 }
 
@@ -55,6 +57,28 @@ void ServiceState::change_unless(int state, int not_state, bool throw_ex)
 	}
 	if (_state != not_state) {
 		_state = state;
+		_state_changed.notify_one();
+	}
+}
+
+void ServiceState::wait_for(int state, std::chrono::milliseconds timeout)
+{
+	std::unique_lock<std::mutex> mlock(_state_mutex);
+	std::chrono::milliseconds remainingInterval = timeout;
+	std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
+	while (state != _state)
+	{
+		auto result = _state_changed.wait_for(mlock, remainingInterval);
+		if (result == std::cv_status::timeout) {
+			break;
+		}
+		else if (state != _state) {
+			// The thread may also be unblocked spuriously, without timeout or notify_one().
+			// In this case, just continue
+			std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
+			auto elapsed = currentTime - startTime;
+			remainingInterval -= std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
+		}
 	}
 }
 

@@ -113,6 +113,19 @@ public:
 	/// \return `false` if an error was encountered; use error methods for details
 	bool run_stream(MediaGenerator& media_generator, const MediaConfig& media_config, const ResponseType& response_types);
 
+	/// Stop the WebSocket stream.
+	///
+	/// This method will cause `run_stream` to return and it closes the WebSocket connection.
+	/// It can be called even if it is not needed; it does not have any effect if `media_generator`
+	/// is not running and/or the WebSocket connection is not open.
+	///
+	/// WebSocketStreamingClient must be destroyed after calling this method, but this method does
+	/// not result in event:EOS being sent to the WebSocket server, so a new WebSocketStreamingClient
+	/// can be created to resume operation, if desired.
+	///
+	/// \return `false` if an error was encountered; use error methods for details
+	bool stop_stream();
+
 private:
 	std::string _access_token;
 	std::ofstream *_alog = nullptr;

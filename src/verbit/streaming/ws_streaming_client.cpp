@@ -41,13 +41,24 @@ WebSocketStreamingClient::WebSocketStreamingClient(std::string access_token) :
 
 WebSocketStreamingClient::~WebSocketStreamingClient()
 {
+	write_alog("WebSocketStreamingClient",  "destructor");
+
+	// make the media worker thread exit, if needed, so the following join will not hang
+	if (!_state.is_final()) {
+		_state.change(ServiceState::state_closing);
+	}
+
 	// clean up media worker thread
 	if (_media_thread) {
 		if (_media_thread->joinable()) {
 			_media_thread->join();
 		}
 		delete _media_thread;
+		_media_thread = nullptr;
 	}
+
+	write_alog("WebSocketStreamingClient",  "media thread exited");
+
 	// close any previously opened log files
 	if (_alog) {
 		delete(_alog);
@@ -164,6 +175,29 @@ bool WebSocketStreamingClient::run_stream(MediaGenerator& media_generator, const
 	return (_error_code == 0);
 }
 
+bool WebSocketStreamingClient::stop_stream()
+{
+	int stateBefore = _state.get();
+
+	write_alog("stop_stream from state",  _state.c_str());
+
+	if (!_state.is_final()) {
+		_state.change(ServiceState::state_closing);
+	}
+
+	// perform additional steps if the state was state_open
+	if (stateBefore == ServiceState::state_open) {
+		// allow time for the media worker thread to read and send the last chunk
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		// close websocket to make run_stream() return
+		write_alog("stop_stream", "closing WebSocket");
+		close_ws();
+		// wait up to a second for the websocket to close
+		_state.wait_for(ServiceState::state_done, std::chrono::milliseconds(1000));
+	}
+
+	return (_state.get() == ServiceState::state_done);
+}
 
 void WebSocketStreamingClient::run_media()
 {
@@ -209,13 +243,27 @@ void WebSocketStreamingClient::run_media()
 		write_alog("media", "finished");
 
 		_state.change_if(ServiceState::state_closing, ServiceState::state_open, false);
-		// the EOS (end of stream) message tells the service we are done
-		// sending media, and the order can be finalized; after this point
-		// we should see responses with `is_end_of_stream=true`
-		std::string event_eos = "{\"event\":\"EOS\",\"payload\":{}}";
-		websocketpp::connection_hdl hdl = _ws_con->get_handle();
-		_ws_endpoint.send(hdl, event_eos, websocketpp::frame::opcode::text);
-	} else {
+		for (int i = 0; i < 15 && _state.get() != ServiceState::state_done; i++) {
+			// the EOS (end of stream) message tells the service we are done
+			// sending media, and the order can be finalized; after this point
+			// we should see responses with `is_end_of_stream=true`
+			// which will cause us to close the WebSocket
+			std::string event_eos = "{\"event\":\"EOS\",\"payload\":{}}";
+			websocketpp::connection_hdl hdl = _ws_con->get_handle();
+			_ws_endpoint.send(hdl, event_eos, websocketpp::frame::opcode::text);
+			write_alog("media", "sent EOS");
+			_state.wait_for(ServiceState::state_done, std::chrono::milliseconds(1000));
+		}
+		if (_state.get() == ServiceState::state_done) {
+			write_alog("WebSocket", "closed due to EOS");
+		}
+		else {
+			write_alog("media", "is_end_of_stream=true not received from service");
+			// this will cause run_stream() to exit
+			close_ws();
+		}
+	}
+	else {
 		std::string debug = std::string("exited loop without finish; state=") + _state.c_str();
 		write_alog("media", debug);
 	}
@@ -224,8 +272,11 @@ void WebSocketStreamingClient::run_media()
 void WebSocketStreamingClient::close_ws()
 {
 	write_alog("WebSocket", "closing");
-	websocketpp::connection_hdl hdl = _ws_con->get_handle();
-	_ws_endpoint.close(hdl, websocketpp::close::status::going_away, "");
+	if (_ws_con)
+	{
+		websocketpp::connection_hdl hdl = _ws_con->get_handle();
+		_ws_endpoint.close(hdl, websocketpp::close::status::going_away, "");
+	}
 }
 
 // NOTE: this method has no effect and does no logging unless
