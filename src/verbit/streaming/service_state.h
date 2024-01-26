@@ -1,5 +1,6 @@
 #include <string>
 #include <mutex>
+#include <condition_variable>
 
 namespace verbit {
 namespace streaming {
@@ -10,7 +11,7 @@ namespace streaming {
 class ServiceState {
 public:
 	/// Construct a new service state.
-	constexpr ServiceState() : _state(state_initial) { }
+	ServiceState() : _state(state_initial) { }
 
 	static const int state_initial = 0;  ///< initial state
 	static const int state_opening = 1;  ///< WebSocket is being opened
@@ -47,9 +48,16 @@ public:
 	/// \param throw_ex if true, throw exception if currently in the not-expected state; otherwise fail silently
 	void change_unless(int state, int not_state, bool throw_ex);
 
+	/// Wait for state change, or return on timeout
+	///
+	/// \param state the state to wait for
+	/// \param timeout how long to wait before returning anyway
+	void wait_for(int state, std::chrono::milliseconds timeout);
+
 private:
 	int _state;
 	std::mutex _state_mutex;
+	std::condition_variable _state_changed;
 };
 
 } // namespace
