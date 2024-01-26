@@ -2,6 +2,13 @@
 
 This project uses [Semantic Versioning](http://semver.org/).
 
+## [1.1.0](https://github.com/verbit-ai/verbit-streaming-cpp-sdk/releases/tag/v1.1.0) (2024-02-01)
+
+- Improved resilience for sending and receiving end-of-stream signals to service host
+- Enable WebSocketStreamingClient logging at run time with call to `log_path()`
+- Add `stop_stream()` method to WebSocketStreamingClient to provide another shutdown option
+- Stability improvements for various exit scenarios
+
 ## [1.0.1](https://github.com/verbit-ai/verbit-streaming-cpp-sdk/releases/tag/v1.0.1) (2022-09-27)
 
 - Support `ws_url` that already has params (new auth scheme)
