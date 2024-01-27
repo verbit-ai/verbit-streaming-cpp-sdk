@@ -213,11 +213,31 @@ void WebSocketStreamingClient::run_media()
 	write_alog("WebSocket", debug);
 
 	// start sending audio chunks
-	while (!_media_generator->finished() && (_state.get() == ServiceState::state_open)) {
+	while ( (_state.get() == ServiceState::state_open) && !_media_generator->finished() ) {
 		std::string chunk = _media_generator->get_chunk();
-		if (chunk.length() > 0) {
+		if (chunk == MediaGenerator::END_OF_FILE) {
+			_error_code = AUDIO_TCP_ERROR;
+			stop_stream();
+		}
+		else if (chunk.length() > 0) {
 			websocketpp::connection_hdl hdl = _ws_con->get_handle();
-			_ws_endpoint.send(hdl, chunk, websocketpp::frame::opcode::binary);
+			websocketpp::lib::error_code ec;
+
+			_ws_endpoint.send(hdl, chunk, websocketpp::frame::opcode::binary, ec);
+
+			if (ec) {
+				static int errorCount = 0;
+				errorCount++;
+				std::stringstream ec_ss;
+				ec_ss << ec;
+				write_alog("send audio error count", std::to_string(errorCount));
+				write_alog("send audio ec", ec_ss.str());
+				write_alog("send audio ec message", ec.message());
+				if (errorCount > 10) {
+					_error_code = ec.value();
+					stop_stream();
+				}
+			}
 
 			wssc_bytes_sent += chunk.length();
 			if (wssc_bytes_sent > wssc_report_at_bytes) {
@@ -238,19 +258,31 @@ void WebSocketStreamingClient::run_media()
 		}
 	}
 
-	if (_media_generator->finished()) {
+	if ( (_state.get() == ServiceState::state_open) && _media_generator->finished() ) {
+		std::string event_eos = "{\"event\":\"EOS\",\"payload\":{}}";
 
 		write_alog("media", "finished");
 
 		_state.change_if(ServiceState::state_closing, ServiceState::state_open, false);
+
 		for (int i = 0; i < 15 && _state.get() != ServiceState::state_done; i++) {
 			// the EOS (end of stream) message tells the service we are done
 			// sending media, and the order can be finalized; after this point
 			// we should see responses with `is_end_of_stream=true`
 			// which will cause us to close the WebSocket
-			std::string event_eos = "{\"event\":\"EOS\",\"payload\":{}}";
 			websocketpp::connection_hdl hdl = _ws_con->get_handle();
-			_ws_endpoint.send(hdl, event_eos, websocketpp::frame::opcode::text);
+			websocketpp::lib::error_code ec;
+
+			_ws_endpoint.send(hdl, event_eos, websocketpp::frame::opcode::text, ec);
+
+			if (ec) {
+				std::stringstream ec_ss;
+				ec_ss << ec;
+				write_alog("send eos error on iteration", std::to_string(i));
+				write_alog("send eos ec", ec_ss.str());
+				write_alog("send eos ec message", ec.message());
+			}
+
 			write_alog("media", "sent EOS");
 			_state.wait_for(ServiceState::state_done, std::chrono::milliseconds(1000));
 		}
@@ -339,8 +371,8 @@ void WebSocketStreamingClient::on_fail(websocketpp::connection_hdl hdl)
 	write_alog("on_fail remote code", con->get_remote_close_reason());
 	write_alog("on_fail response message", con->get_response_msg());
 
-	if (con->get_local_close_code() == 1006) {  // abnormal WS close
-		_error_code = 1006;
+	if (con->get_local_close_code() == WS_1006) {  // abnormal WS close
+		_error_code = WS_1006;
 		_service_error = con->get_local_close_reason();
 		// override with specific cases we know:
 		if (_service_error == "Invalid HTTP status.") {
@@ -436,6 +468,18 @@ void WebSocketStreamingClient::on_close(websocketpp::connection_hdl hdl)
 	_state.change_unless(ServiceState::state_done, ServiceState::state_fail, false);
 	std::string debug = std::string("on_close called; state=") + _state.c_str();
 	write_alog("WebSocket", debug);
+
+	// check if this close was caused by an error
+	wspp_client::connection_ptr con = _ws_endpoint.get_con_from_hdl(hdl);
+	websocketpp::lib::error_code ec = con->get_ec();
+	if (ec) {
+		std::stringstream ec_ss;
+		ec_ss << ec;
+		write_alog("on_close ec", ec_ss.str());
+		write_alog("on_close ec message", ec.message());
+		// setting _error_code causes run_stream() to return false
+		_error_code = ec.value();
+	}
 }
 
 } // namespace

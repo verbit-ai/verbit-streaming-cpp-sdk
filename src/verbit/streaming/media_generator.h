@@ -11,6 +11,8 @@ namespace streaming {
 class MediaGenerator
 {
 public:
+	static constexpr const char* END_OF_FILE = "end of file";
+
 	virtual ~MediaGenerator() {}
 
 	/// Return the next chunk of media bytes.
