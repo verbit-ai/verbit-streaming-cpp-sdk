@@ -31,6 +31,9 @@ typedef std::function<void(WebSocketStreamingClient*, nlohmann::json*)> wssc_res
 class WebSocketStreamingClient
 {
 public:
+	static constexpr const int WS_1006 = 1006;
+	static constexpr const int AUDIO_TCP_ERROR = 3500;
+
 	/// Construct a new streaming client.
 	///
 	/// \param access_token credential required to access the service

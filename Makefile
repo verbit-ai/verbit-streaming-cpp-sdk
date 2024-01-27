@@ -6,7 +6,7 @@ endif
 
 TARGET := /usr/local
 OWNFLAGS := -o root -g root
-UBUNTU := bionic
+UBUNTU := focal
 
 SRCNS := verbit/streaming
 SRCDIR := src/$(SRCNS)
