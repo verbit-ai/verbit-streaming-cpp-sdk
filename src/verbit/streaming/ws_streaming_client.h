@@ -32,7 +32,8 @@ class WebSocketStreamingClient
 {
 public:
 	static constexpr const int WS_1006 = 1006;
-	static constexpr const int AUDIO_TCP_ERROR = 3500;
+	static constexpr const int AUDIO_SOURCE_EOF = 3500;
+	static constexpr const int KEEPALIVE_TIMEOUT = 3510;
 
 	/// Construct a new streaming client.
 	///
@@ -139,6 +140,7 @@ private:
 	wssc_response_handler _handler = nullptr;
 	MediaGenerator* _media_generator = nullptr;
 	std::thread* _media_thread = nullptr;
+	std::thread* _keepalive_thread = nullptr;
 	MediaConfig _media_config;
 	ResponseType _response_types;
 	ServiceState _state;
@@ -147,7 +149,13 @@ private:
 	int _error_code;
 	std::string _service_error;
 
+	std::chrono::system_clock::time_point _keepalive_time;
+	std::mutex _keepalive_mutex;
+	std::condition_variable _keepalive_check;
+
 	void run_media();
+	void run_keepalive();
+	void update_keepalive();
 	void close_ws();
 	void write_alog(std::string tag, std::string message);
 
@@ -157,6 +165,8 @@ private:
 	void on_open(websocketpp::connection_hdl hdl);
 	void on_message(websocketpp::connection_hdl hdl, wspp_message_ptr msg);
 	void on_close(websocketpp::connection_hdl hdl);
+	void on_pong(websocketpp::connection_hdl hdl, std::string msg);
+	bool on_ping(websocketpp::connection_hdl hdl, std::string msg);
 };
 
 } // namespace

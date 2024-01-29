@@ -37,6 +37,8 @@ WebSocketStreamingClient::WebSocketStreamingClient(std::string access_token) :
 	_ws_endpoint.set_message_handler(bind(&WebSocketStreamingClient::on_message, this, websocketpp::lib::placeholders::_1, websocketpp::lib::placeholders::_2));
 	_ws_endpoint.set_close_handler(bind(&WebSocketStreamingClient::on_close, this, websocketpp::lib::placeholders::_1));
 	_ws_endpoint.set_fail_handler(bind(&WebSocketStreamingClient::on_fail, this, websocketpp::lib::placeholders::_1));
+	_ws_endpoint.set_ping_handler(bind(&WebSocketStreamingClient::on_ping, this, websocketpp::lib::placeholders::_1, websocketpp::lib::placeholders::_2));
+	_ws_endpoint.set_pong_handler(bind(&WebSocketStreamingClient::on_pong, this, websocketpp::lib::placeholders::_1, websocketpp::lib::placeholders::_2));
 }
 
 WebSocketStreamingClient::~WebSocketStreamingClient()
@@ -46,6 +48,7 @@ WebSocketStreamingClient::~WebSocketStreamingClient()
 	// make the media worker thread exit, if needed, so the following join will not hang
 	if (!_state.is_final()) {
 		_state.change(ServiceState::state_closing);
+		_keepalive_check.notify_one();
 	}
 
 	// clean up media worker thread
@@ -55,6 +58,15 @@ WebSocketStreamingClient::~WebSocketStreamingClient()
 		}
 		delete _media_thread;
 		_media_thread = nullptr;
+	}
+
+	// clean up keepalive thread
+	if (_keepalive_thread) {
+		if (_keepalive_thread->joinable()) {
+			_keepalive_thread->join();
+		}
+		delete _keepalive_thread;
+		_keepalive_thread = nullptr;
 	}
 
 	write_alog("WebSocketStreamingClient",  "media thread exited");
@@ -166,6 +178,10 @@ bool WebSocketStreamingClient::run_stream(MediaGenerator& media_generator, const
 	// start media_generator thread
 	_media_thread = new std::thread(&WebSocketStreamingClient::run_media, this);
 
+	// start keepalive thread
+	update_keepalive();
+	_keepalive_thread = new std::thread(&WebSocketStreamingClient::run_keepalive, this);
+
 	// start the ASIO io_service run loop: this doesn't return until the WebSocket closes
 	_ws_endpoint.run();
 
@@ -183,6 +199,7 @@ bool WebSocketStreamingClient::stop_stream()
 
 	if (!_state.is_final()) {
 		_state.change(ServiceState::state_closing);
+		_keepalive_check.notify_one();
 	}
 
 	// perform additional steps if the state was state_open
@@ -216,7 +233,7 @@ void WebSocketStreamingClient::run_media()
 	while ( (_state.get() == ServiceState::state_open) && !_media_generator->finished() ) {
 		std::string chunk = _media_generator->get_chunk();
 		if (chunk == MediaGenerator::END_OF_FILE) {
-			_error_code = AUDIO_TCP_ERROR;
+			_error_code = AUDIO_SOURCE_EOF;
 			stop_stream();
 		}
 		else if (chunk.length() > 0) {
@@ -260,12 +277,15 @@ void WebSocketStreamingClient::run_media()
 
 	if ( (_state.get() == ServiceState::state_open) && _media_generator->finished() ) {
 		std::string event_eos = "{\"event\":\"EOS\",\"payload\":{}}";
+		bool eosSent = false;
+		static const int EOS_REPLY_TIMEOUT_S = 15;
 
 		write_alog("media", "finished");
 
 		_state.change_if(ServiceState::state_closing, ServiceState::state_open, false);
 
-		for (int i = 0; i < 15 && _state.get() != ServiceState::state_done; i++) {
+		// send EOS and wait EOS_REPLY_TIMEOUT_S for EOS reply from the service
+		for (int i = 0; i < EOS_REPLY_TIMEOUT_S && _state.get() != ServiceState::state_done; i++) {
 			// the EOS (end of stream) message tells the service we are done
 			// sending media, and the order can be finalized; after this point
 			// we should see responses with `is_end_of_stream=true`
@@ -273,24 +293,31 @@ void WebSocketStreamingClient::run_media()
 			websocketpp::connection_hdl hdl = _ws_con->get_handle();
 			websocketpp::lib::error_code ec;
 
-			_ws_endpoint.send(hdl, event_eos, websocketpp::frame::opcode::text, ec);
+			if (!eosSent) {
+				_ws_endpoint.send(hdl, event_eos, websocketpp::frame::opcode::text, ec);
+			}
 
 			if (ec) {
 				std::stringstream ec_ss;
 				ec_ss << ec;
-				write_alog("send eos error on iteration", std::to_string(i));
+				write_alog("send eos error count", std::to_string(i));
 				write_alog("send eos ec", ec_ss.str());
 				write_alog("send eos ec message", ec.message());
 			}
+			else {
+				eosSent = true;
+			}
 
 			write_alog("media", "sent EOS");
+			// 1 second wait per iteration
 			_state.wait_for(ServiceState::state_done, std::chrono::milliseconds(1000));
 		}
 		if (_state.get() == ServiceState::state_done) {
 			write_alog("WebSocket", "closed due to EOS");
 		}
 		else {
-			write_alog("media", "is_end_of_stream=true not received from service");
+			write_alog("media", "is_end_of_stream=true not received from service within"
+					+ std::to_string(EOS_REPLY_TIMEOUT_S) + "s");
 			// this will cause run_stream() to exit
 			close_ws();
 		}
@@ -299,6 +326,32 @@ void WebSocketStreamingClient::run_media()
 		std::string debug = std::string("exited loop without finish; state=") + _state.c_str();
 		write_alog("media", debug);
 	}
+}
+
+void WebSocketStreamingClient::run_keepalive()
+{
+	static const int KEEPALIVE_TIMEOUT_SECONDS = 30;
+
+	while (!_state.is_final() ) {
+		std::unique_lock<std::mutex> lock(_keepalive_mutex);
+		std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+		if (now > (_keepalive_time + std::chrono::seconds(KEEPALIVE_TIMEOUT_SECONDS))) {
+			// _keepalive_time was not updated recently
+			_error_code = KEEPALIVE_TIMEOUT;
+			lock.unlock();
+			write_alog("run_keepalive", "no pings received for " + std::to_string(KEEPALIVE_TIMEOUT_SECONDS) +"s");
+			stop_stream();
+			break;
+		}
+		// wait for _keepalive_check to be signaled or up to 5 seconds
+		_keepalive_check.wait_for(lock, std::chrono::seconds(5));
+	}
+}
+
+void WebSocketStreamingClient::update_keepalive()
+{
+	std::unique_lock<std::mutex> lock(_keepalive_mutex);
+	_keepalive_time = std::chrono::system_clock::now();
 }
 
 void WebSocketStreamingClient::close_ws()
@@ -480,6 +533,17 @@ void WebSocketStreamingClient::on_close(websocketpp::connection_hdl hdl)
 		// setting _error_code causes run_stream() to return false
 		_error_code = ec.value();
 	}
+}
+
+void WebSocketStreamingClient::on_pong(websocketpp::connection_hdl hdl, std::string msg) {
+	write_alog("on_pong", msg.c_str());
+
+}
+
+bool WebSocketStreamingClient::on_ping(websocketpp::connection_hdl hdl, std::string msg) {
+	write_alog("on_ping", msg.c_str());
+	update_keepalive();
+	return true;
 }
 
 } // namespace
