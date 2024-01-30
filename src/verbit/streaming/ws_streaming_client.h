@@ -165,7 +165,6 @@ private:
 	void on_open(websocketpp::connection_hdl hdl);
 	void on_message(websocketpp::connection_hdl hdl, wspp_message_ptr msg);
 	void on_close(websocketpp::connection_hdl hdl);
-	void on_pong(websocketpp::connection_hdl hdl, std::string msg);
 	bool on_ping(websocketpp::connection_hdl hdl, std::string msg);
 };
 

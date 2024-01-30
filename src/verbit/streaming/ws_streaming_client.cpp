@@ -38,7 +38,6 @@ WebSocketStreamingClient::WebSocketStreamingClient(std::string access_token) :
 	_ws_endpoint.set_close_handler(bind(&WebSocketStreamingClient::on_close, this, websocketpp::lib::placeholders::_1));
 	_ws_endpoint.set_fail_handler(bind(&WebSocketStreamingClient::on_fail, this, websocketpp::lib::placeholders::_1));
 	_ws_endpoint.set_ping_handler(bind(&WebSocketStreamingClient::on_ping, this, websocketpp::lib::placeholders::_1, websocketpp::lib::placeholders::_2));
-	_ws_endpoint.set_pong_handler(bind(&WebSocketStreamingClient::on_pong, this, websocketpp::lib::placeholders::_1, websocketpp::lib::placeholders::_2));
 }
 
 WebSocketStreamingClient::~WebSocketStreamingClient()
@@ -533,11 +532,6 @@ void WebSocketStreamingClient::on_close(websocketpp::connection_hdl hdl)
 		// setting _error_code causes run_stream() to return false
 		_error_code = ec.value();
 	}
-}
-
-void WebSocketStreamingClient::on_pong(websocketpp::connection_hdl hdl, std::string msg) {
-	write_alog("on_pong", msg.c_str());
-
 }
 
 bool WebSocketStreamingClient::on_ping(websocketpp::connection_hdl hdl, std::string msg) {
