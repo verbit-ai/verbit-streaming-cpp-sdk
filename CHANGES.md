@@ -8,6 +8,7 @@ This project uses [Semantic Versioning](http://semver.org/).
 - Enable WebSocketStreamingClient logging at run time with call to `log_path()`
 - Add `stop_stream()` method to WebSocketStreamingClient to provide another shutdown option
 - Stability improvements for various exit scenarios
+- Add keepalive thread to close websocket in case it becomes unresponsive
 
 ## [1.0.1](https://github.com/verbit-ai/verbit-streaming-cpp-sdk/releases/tag/v1.0.1) (2022-09-27)
 
