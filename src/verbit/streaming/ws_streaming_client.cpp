@@ -361,8 +361,13 @@ void WebSocketStreamingClient::close_ws()
 	write_alog("WebSocket", "closing");
 	if (_ws_con)
 	{
-		websocketpp::connection_hdl hdl = _ws_con->get_handle();
-		_ws_endpoint.close(hdl, websocketpp::close::status::going_away, "");
+		try {
+			websocketpp::connection_hdl hdl = _ws_con->get_handle();
+			_ws_endpoint.close(hdl, websocketpp::close::status::going_away, "");
+		} catch (std::exception & e) {
+			write_alog("WebSocket", std::string("endpoint::close threw exception: ") + e.what());
+			// and then don't worry about it - no other action needed
+		}
 	}
 }
 
