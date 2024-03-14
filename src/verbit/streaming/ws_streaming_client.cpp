@@ -277,7 +277,7 @@ void WebSocketStreamingClient::run_media()
 	if ( (_state.get() == ServiceState::state_open) && _media_generator->finished() ) {
 		std::string event_eos = "{\"event\":\"EOS\",\"payload\":{}}";
 		bool eosSent = false;
-		static const int EOS_REPLY_TIMEOUT_S = 70;
+		static const int EOS_REPLY_TIMEOUT_S = 15;
 
 		write_alog("media", "finished");
 
@@ -303,9 +303,12 @@ void WebSocketStreamingClient::run_media()
 				write_alog("send eos ec", ec_ss.str());
 				write_alog("send eos ec message", ec.message());
 			}
-			else {
+			else if (!eosSent) {
 				write_alog("media", "sent EOS");
 				eosSent = true;
+			}
+			else {
+				write_alog("media", "waiting for is_end_of_stream=true response");
 			}
 
 			// 1 second wait per iteration
