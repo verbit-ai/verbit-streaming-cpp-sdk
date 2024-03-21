@@ -318,7 +318,7 @@ void WebSocketStreamingClient::run_media()
 			write_alog("WebSocket", "closed due to EOS");
 		}
 		else {
-			write_alog("media", "is_end_of_stream=true not received from service within"
+			write_alog("media", "is_end_of_stream=true not received from service within "
 					+ std::to_string(EOS_REPLY_TIMEOUT_S) + "s");
 			// this will cause run_stream() to exit
 			close_ws();
@@ -543,7 +543,7 @@ void WebSocketStreamingClient::on_close(websocketpp::connection_hdl hdl)
 }
 
 bool WebSocketStreamingClient::on_ping(websocketpp::connection_hdl hdl, std::string msg) {
-	write_alog("on_ping", msg.c_str());
+	write_alog("on_ping", "received");
 	update_keepalive();
 	return true;
 }
