@@ -540,6 +540,11 @@ void WebSocketStreamingClient::on_close(websocketpp::connection_hdl hdl)
 		// setting _error_code causes run_stream() to return false
 		_error_code = ec.value();
 	}
+
+	// Stop the io_service object's event processing loop.
+	// This ensures that the call to _ws_endpoint.run() returns.
+	// See comments in /usr/local/include/boost/asio/io_service.hpp.
+	_ws_endpoint.stop();
 }
 
 bool WebSocketStreamingClient::on_ping(websocketpp::connection_hdl hdl, std::string msg) {
