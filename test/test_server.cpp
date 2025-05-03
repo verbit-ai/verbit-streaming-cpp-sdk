@@ -161,7 +161,7 @@ stringVector tokenize(std::string line)
 	return tokens;
 }
 
-std::string response_items(std::string transcript)
+std::string response_items(std::string transcript, std::string speaker_id)
 {
 	stringVector words = tokenize(transcript);
 	std::string r_items;
@@ -174,7 +174,13 @@ std::string response_items(std::string transcript)
 		}
 		double start_t = ((double)tick) / 1000.0;
 		double end_t = ((double)tick + 7) / 1000.0;
-		r_items += (std::string("{\"value\":\"") + word + "\",");
+		if (word == "." || word == "," || word == "?" || word == "!") {
+			r_items += std::string("{\"kind\":\"punct\",");
+		} else {
+			r_items += std::string("{\"kind\":\"text\",");
+		}
+		r_items += (std::string("\"value\":\"") + word + "\",");
+		r_items += (std::string("\"speaker_id\":\"") + speaker_id + "\",");
 		char tstr[128];
 		sprintf(tstr, "%.3f", start_t);
 		r_items += (std::string("\"start\":") + tstr + ",");
@@ -188,17 +194,27 @@ std::string response_items(std::string transcript)
 std::string response_json(bool eos)
 {
 	std::string transcript = std::string(eos ? "I saw " : "I've seen ") +
-		std::to_string(seen_bytes) + " bytes. ";
+		std::to_string(seen_bytes) + " bytes . ";  // NB punct must be separate token
 	std::string eos_s = eos ? "true" : "false";
 	uuid_t uuid;
 	uuid_generate_random(uuid);
 	char* uuid_p = new char[256];
 	uuid_unparse(uuid, uuid_p);
-	std::string items = response_items(transcript.substr(0, transcript.length() - 1));
+	std::string speaker_uuid;
+	if ((seen_bytes % 198000) < 96000) {
+		speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000001";
+	} else {
+		speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000002";
+	}
+	std::string items = response_items(transcript.substr(0, transcript.length() - 1), speaker_uuid);
 	std::string json = std::string("{\"response\":{") +
 		"\"id\":\"" + uuid_p + "\"," +
 		"\"type\":\"captions\"," +
 		"\"is_final\":true,\"is_end_of_stream\":" + eos_s + "," +
+		"\"speakers\":[" +
+		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000001\",\"label\":\"Odd Speaker\"}," +
+		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000002\",\"label\":\"Even Speaker\"}" +
+		"]," +
 		"\"alternatives\":[{" +
 		"\"transcript\":\"" + transcript + "\"," +
 		"\"items\":[" + items + "]" +
