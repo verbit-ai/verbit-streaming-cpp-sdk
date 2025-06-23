@@ -29,6 +29,7 @@ std::chrono::time_point<std::chrono::system_clock> media_start;
 size_t seen_bytes;
 size_t sent_resp_bytes;
 std::ofstream dump_file;
+bool translation_service;
 
 #define PIDFILE "/tmp/wss_test_server.pid"
 
@@ -84,6 +85,11 @@ bool on_validate(wspp_server* s, websocketpp::connection_hdl hdl) {
 	if (auth_hdr.length() < 40) {  // JWT tokens are long
 		con->set_status(websocketpp::http::status_code::unauthorized);
 		return false;
+	}
+	if (auth_hdr.find("LANG") == std::string::npos) {
+		translation_service = false;
+	} else {
+		translation_service = true;
 	}
 	return true;
 }
@@ -191,29 +197,56 @@ std::string response_items(std::string transcript, std::string speaker_id)
 	return r_items;
 }
 
-std::string response_json(bool eos)
+std::string response_json(bool eos, std::string lang)
 {
-	std::string transcript = std::string(eos ? "I saw " : "I've seen ") +
-		std::to_string(seen_bytes) + " bytes . ";  // NB punct must be separate token
+	std::string transcript;
+	std::string language_code;
+	// NB punct (final period) must be separate token
+	if (lang == "es-ES") {
+		transcript = std::string(eos ? "Vi " : "He visto ") +
+			std::to_string(seen_bytes) + " bytes . ";
+		language_code = "es-ES";
+	} else {
+		transcript = std::string(eos ? "I saw " : "I've seen ") +
+			std::to_string(seen_bytes) + " bytes . ";
+		language_code = "en-US";
+	}
 	std::string eos_s = eos ? "true" : "false";
 	uuid_t uuid;
 	uuid_generate_random(uuid);
 	char* uuid_p = new char[256];
 	uuid_unparse(uuid, uuid_p);
 	std::string speaker_uuid;
-	if ((seen_bytes % 198000) < 96000) {
+	if ((seen_bytes % 288000) < 96000) {
 		speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000001";
-	} else {
+	} else if ((seen_bytes % 288000) < 198000) {
 		speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000002";
+	} else {
+		speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000003";
 	}
 	std::string items = response_items(transcript.substr(0, transcript.length() - 1), speaker_uuid);
+	std::string service_type;
+	if (translation_service) {
+		service_type = "translation";
+	} else {
+		service_type = "transcription";
+	}
 	std::string json = std::string("{\"response\":{") +
 		"\"id\":\"" + uuid_p + "\"," +
 		"\"type\":\"captions\"," +
+		"\"service_type\":\"" + service_type + "\"," +
+		"\"language_code\":\"" + language_code + "\"," +
 		"\"is_final\":true,\"is_end_of_stream\":" + eos_s + "," +
 		"\"speakers\":[" +
-		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000001\",\"label\":\"Odd Speaker\"}," +
-		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000002\",\"label\":\"Even Speaker\"}" +
+#ifndef NO_LABELS
+		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000001\",\"label\":\"First Host\"}," +
+		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000002\",\"label\":\"Second Host\"}," +
+		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000003\",\"label\":\"Speaker 3\"}" +  // unidentified
+#else
+		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000001\",\"label\":\"\"}," +
+		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000002\",\"label\":\"\"}," +
+		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000003\",\"label\":\"\"}" +
+#endif
 		"]," +
 		"\"alternatives\":[{" +
 		"\"transcript\":\"" + transcript + "\"," +
@@ -231,7 +264,7 @@ void on_message_text(wspp_server* s, websocketpp::connection_hdl hdl, wspp_serve
 	if (payload_len > 0) {
 		// assume this is the special "EOS" JSON event message;
 		// reply with a response that has `is_end_of_stream=true`
-		std::string json = response_json(true);
+		std::string json = response_json(true, "en-US");
 		s->send(hdl, json, websocketpp::frame::opcode::text);
 		std::cout << "on_message (text) replied w/text: " << json << std::endl;
 	}
@@ -256,9 +289,15 @@ void on_message_binary(wspp_server* s, websocketpp::connection_hdl hdl, wspp_ser
 		// simulate delay from producing captions:
 		std::this_thread::sleep_for(std::chrono::milliseconds(LATENCY));
 		try {
-			std::string json = response_json(false);
+			std::string json;
+			if (translation_service) {
+				json = response_json(false, "es-ES");
+				s->send(hdl, json, websocketpp::frame::opcode::text);
+				std::cout << "on_message (binary) replied w/text (es-ES): " << json << std::endl;
+			}
+			json = response_json(false, "en-US");
 			s->send(hdl, json, websocketpp::frame::opcode::text);
-			std::cout << "on_message (binary) replied w/text: " << json << std::endl;
+			std::cout << "on_message (binary) replied w/text (en-US): " << json << std::endl;
 		} catch (websocketpp::exception const & e) {
 			std::cerr << "on_message (binary) send failed: " << "(" << e.what() << ")" << std::endl;
 		}
