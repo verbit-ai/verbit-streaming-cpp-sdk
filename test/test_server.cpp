@@ -14,6 +14,8 @@
 #include <websocketpp/server.hpp>
 
 #define LATENCY 250
+//#define ATMOSPHERICS
+//#define NO_LABELS
 
 typedef websocketpp::server<websocketpp::config::asio_tls> wspp_server;
 typedef websocketpp::config::asio::message_type::ptr wspp_message_ptr;
@@ -197,6 +199,10 @@ std::string response_items(std::string transcript, std::string speaker_id)
 	return r_items;
 }
 
+#ifdef ATMOSPHERICS
+int didApplause = false;
+#endif
+
 std::string response_json(bool eos, std::string lang)
 {
 	std::string transcript;
@@ -217,6 +223,7 @@ std::string response_json(bool eos, std::string lang)
 	char* uuid_p = new char[256];
 	uuid_unparse(uuid, uuid_p);
 	std::string speaker_uuid;
+#ifndef ATMOSPHERICS
 	if ((seen_bytes % 288000) < 96000) {
 		speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000001";
 	} else if ((seen_bytes % 288000) < 198000) {
@@ -224,6 +231,15 @@ std::string response_json(bool eos, std::string lang)
 	} else {
 		speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000003";
 	}
+#else
+	speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000001";
+	if ((seen_bytes % 288000) < 224000) {
+		didApplause = false;
+	} else if (!didApplause) {
+		transcript = "[APPLAUSE] ";
+		didApplause = true;
+	}
+#endif
 	std::string items = response_items(transcript.substr(0, transcript.length() - 1), speaker_uuid);
 	std::string service_type;
 	if (translation_service) {
