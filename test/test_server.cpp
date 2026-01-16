@@ -16,6 +16,7 @@
 #define LATENCY 250
 //#define ATMOSPHERICS
 //#define NO_LABELS
+//#define INT_SPEAKER_ID
 
 typedef websocketpp::server<websocketpp::config::asio_tls> wspp_server;
 typedef websocketpp::config::asio::message_type::ptr wspp_message_ptr;
@@ -188,7 +189,15 @@ std::string response_items(std::string transcript, std::string speaker_id)
 			r_items += std::string("{\"kind\":\"text\",");
 		}
 		r_items += (std::string("\"value\":\"") + word + "\",");
+#ifdef INT_SPEAKER_ID
+		if (speaker_id.empty()) {
+			r_items += (std::string("\"speaker_id\":0,"));
+		} else {
+			r_items += (std::string("\"speaker_id\":\"") + speaker_id + "\",");
+		}
+#else
 		r_items += (std::string("\"speaker_id\":\"") + speaker_id + "\",");
+#endif
 		char tstr[128];
 		sprintf(tstr, "%.3f", start_t);
 		r_items += (std::string("\"start\":") + tstr + ",");
@@ -229,7 +238,11 @@ std::string response_json(bool eos, std::string lang)
 	} else if ((seen_bytes % 288000) < 198000) {
 		speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000002";
 	} else {
+#ifdef INT_SPEAKER_ID
+		speaker_uuid = "";
+#else
 		speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000003";
+#endif
 	}
 #else
 	speaker_uuid = "c6eb6f2b-f85b-478f-af8a-a21b00000001";
@@ -257,11 +270,19 @@ std::string response_json(bool eos, std::string lang)
 #ifndef NO_LABELS
 		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000001\",\"label\":\"First Host\"}," +
 		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000002\",\"label\":\"Second Host\"}," +
+#ifdef INT_SPEAKER_ID
+		"{\"id\":0,\"label\":\"\"}" +
+#else
 		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000003\",\"label\":\"Speaker 3\"}" +  // unidentified
+#endif
 #else
 		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000001\",\"label\":\"\"}," +
 		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000002\",\"label\":\"\"}," +
+#ifdef INT_SPEAKER_ID
+		"{\"id\":0,\"label\":\"\"}" +
+#else
 		"{\"id\":\"c6eb6f2b-f85b-478f-af8a-a21b00000003\",\"label\":\"\"}" +
+#endif
 #endif
 		"]," +
 		"\"alternatives\":[{" +
