@@ -2,6 +2,10 @@
 
 This project uses [Semantic Versioning](http://semver.org/).
 
+## [1.1.3](https://github.com/verbit-ai/verbit-streaming-cpp-sdk/releases/tag/v1.1.3) (2026-01-23)
+
+- Automatically retry WebSocket connection a few times, after failure (resilience)
+
 ## [1.1.1](https://github.com/verbit-ai/verbit-streaming-cpp-sdk/releases/tag/v1.1.1) (2024-03-18)
 
 - Adjust timeout for shutdown at end of stream to 15s

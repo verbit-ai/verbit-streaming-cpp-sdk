@@ -13,7 +13,7 @@
 #include <verbit/streaming/version.h>
 
 #define WSSC_DEFAULT_WS_URL "wss://speech.verbit.co/ws"
-#define WSSC_DEFAULT_CONNECTION_RETRY_SECONDS 60.0
+#define WSSC_DEFAULT_CONNECTION_RETRY_SECONDS 0.4
 
 namespace verbit {
 namespace streaming {
@@ -34,6 +34,7 @@ public:
 	static constexpr const int WS_1006 = 1006;
 	static constexpr const int AUDIO_SOURCE_EOF = 3500;
 	static constexpr const int KEEPALIVE_TIMEOUT = 3510;
+	static constexpr const double MAX_RETRY_SECONDS = 2.5;
 
 	/// Construct a new streaming client.
 	///

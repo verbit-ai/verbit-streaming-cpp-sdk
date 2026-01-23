@@ -17,6 +17,7 @@
 //#define ATMOSPHERICS
 //#define NO_LABELS
 //#define INT_SPEAKER_ID
+//#define FAIL_CONNECT_SOMETIMES
 
 typedef websocketpp::server<websocketpp::config::asio_tls> wspp_server;
 typedef websocketpp::config::asio::message_type::ptr wspp_message_ptr;
@@ -77,6 +78,18 @@ wspp_context_ptr on_tls_init(wspp_server* s, websocketpp::connection_hdl hdl)
 // Simple way to test that `Authorization` header was provided
 bool on_validate(wspp_server* s, websocketpp::connection_hdl hdl) {
 	wspp_server::connection_ptr con = s->get_con_from_hdl(hdl);
+
+#if defined(FAIL_CONNECT_SOMETIMES)
+	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+	auto duration = now.time_since_epoch();
+	auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+	if ((seconds & 0x7) > 1) {
+		con->set_status(websocketpp::http::status_code::request_timeout);
+		std::cout << "on_validate set HTTP 408 (simulated connect failure)" << std::endl;
+		return false;
+	}
+#endif
+
 	std::string auth_hdr(con->get_request_header("Authorization"));
 	std::string sanitized_hdr = auth_hdr;
 	if (auth_hdr.length() >= 11) {

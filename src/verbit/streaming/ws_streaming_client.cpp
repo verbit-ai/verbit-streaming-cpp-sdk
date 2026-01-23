@@ -157,7 +157,7 @@ bool WebSocketStreamingClient::run_stream(MediaGenerator& media_generator, const
 
 	write_alog("ws_full_url", ws_full_url());
 
-	// connect to the WebSocket server
+	// connect to the WebSocket server (first attempt)
 	_state.change(ServiceState::state_opening);
 	websocketpp::lib::error_code ec;
 	_ws_con = _ws_endpoint.get_connection(ws_full_url(), ec);
@@ -172,14 +172,16 @@ bool WebSocketStreamingClient::run_stream(MediaGenerator& media_generator, const
 	_ws_con->append_header("Authorization", std::string("Bearer ") + _access_token);
 	_ws_endpoint.connect(_ws_con);
 
-	write_alog("WebSocket", "connected");
+	write_alog("WebSocket", "connect queued");
 
 	// start media_generator thread
 	_media_thread = new std::thread(&WebSocketStreamingClient::run_media, this);
 
 	// start keepalive thread
 	update_keepalive();
+#if !defined(NO_KEEPALIVE_THREAD)
 	_keepalive_thread = new std::thread(&WebSocketStreamingClient::run_keepalive, this);
+#endif
 
 	// start the ASIO io_service run loop: this doesn't return until the WebSocket closes
 	_ws_endpoint.run();
@@ -409,6 +411,32 @@ wspp_context_ptr WebSocketStreamingClient::on_tls_init(websocketpp::connection_h
 // after `on_open` is called, `on_fail` will never be called
 void WebSocketStreamingClient::on_fail(websocketpp::connection_hdl hdl)
 {
+	if (_max_conn_retry < MAX_RETRY_SECONDS) {
+		// backoff delay before next attempt
+		std::chrono::duration<double> dur(_max_conn_retry);
+		std::this_thread::sleep_for(dur);
+
+		// connect to the WebSocket server (subsequent retry)
+		websocketpp::lib::error_code ec;
+		_ws_con = _ws_endpoint.get_connection(ws_full_url(), ec);
+		if (ec) {
+			write_alog("get_connection error", ec.message());
+			websocketpp::lib::error_code transport_ec = _ws_con->get_transport_ec();
+			write_alog("transport-specific get_connection error", transport_ec.message());
+			_error_code = _ws_con->get_local_close_code();
+			_service_error = _ws_con->get_local_close_reason();
+			// fall through to final `state_fail`
+		} else {
+			// leave `_state` in `ServiceState::state_opening`
+			_ws_con->append_header("Authorization", std::string("Bearer ") + _access_token);
+			_ws_endpoint.connect(_ws_con);
+			std::string debug = std::string("connect requeued by on_fail, after retry_delay=") + std::to_string(_max_conn_retry);
+			write_alog("WebSocket", debug);
+			_max_conn_retry *= 1.5;
+			return;
+		}
+	}
+
 	_state.change_if(ServiceState::state_fail, ServiceState::state_opening, true);
 
 	wspp_client::connection_ptr con = _ws_endpoint.get_con_from_hdl(hdl);
