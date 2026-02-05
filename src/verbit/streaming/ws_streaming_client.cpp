@@ -334,16 +334,20 @@ void WebSocketStreamingClient::run_media()
 
 void WebSocketStreamingClient::run_keepalive()
 {
-	static const int KEEPALIVE_TIMEOUT_SECONDS = 30;
+	int keepalive_timeout_seconds = 30;
+	char *env_ptr = getenv("VERBIT_KEEPALIVE_SECONDS");
+	if (env_ptr != nullptr) {
+		keepalive_timeout_seconds = atoi(env_ptr);
+	}
 
 	while (!_state.is_final() ) {
 		std::unique_lock<std::mutex> lock(_keepalive_mutex);
 		std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-		if (now > (_keepalive_time + std::chrono::seconds(KEEPALIVE_TIMEOUT_SECONDS))) {
+		if (now > (_keepalive_time + std::chrono::seconds(keepalive_timeout_seconds))) {
 			// _keepalive_time was not updated recently
 			_error_code = KEEPALIVE_TIMEOUT;
 			lock.unlock();
-			write_alog("run_keepalive", "no pings received for " + std::to_string(KEEPALIVE_TIMEOUT_SECONDS) +"s");
+			write_alog("run_keepalive", "no pings received for " + std::to_string(keepalive_timeout_seconds) +"s");
 			stop_stream();
 			break;
 		}
