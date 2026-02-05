@@ -262,7 +262,7 @@ void WebSocketStreamingClient::run_media()
 				std::stringstream media_ss;
 				media_ss << "sent chunk " << chunk.length() << " bytes" <<
 					" get_buffered_amount() " << _ws_con->get_buffered_amount() <<
-					" have sent " << wssc_bytes_sent << " bytes" << std::endl;
+					" have sent " << wssc_bytes_sent << " bytes";
 				write_alog("media", media_ss.str());
 				wssc_report_at_bytes += 500000L;
 			}
@@ -270,7 +270,7 @@ void WebSocketStreamingClient::run_media()
 #if defined(VERBOSE_DEBUG)
 			std::stringstream media_ss;
 			media_ss << "sent chunk " << chunk.length() << " bytes" <<
-				" get_buffered_amount() " << _ws_con->get_buffered_amount() << std::endl;
+				" get_buffered_amount() " << _ws_con->get_buffered_amount();
 			write_alog("media", media_ss.str());
 #endif
 		}
@@ -536,6 +536,8 @@ void WebSocketStreamingClient::on_message(websocketpp::connection_hdl hdl, wspp_
 		+ " frame_type " + _frame_type_str(msg->get_opcode(), msg->get_compressed(), msg->get_fin())
 		+ " payload_len " + std::to_string(payload_len);
 	write_alog("WebSocket", debug);
+
+	update_keepalive();
 
 	// parse message JSON and deliver to handler
 	nlohmann::json message = nlohmann::json::parse(msg->get_payload());

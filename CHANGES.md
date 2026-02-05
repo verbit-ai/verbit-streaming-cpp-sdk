@@ -5,6 +5,7 @@ This project uses [Semantic Versioning](http://semver.org/).
 ## [1.1.4](https://github.com/verbit-ai/verbit-streaming-cpp-sdk/releases/tag/v1.1.4) (2026-02-05)
 
 - Make ping keepalive time configurable from default 30s
+- Reset keepalive time on receipt of caption response, in addition to ping (resilience)
 
 ## [1.1.3](https://github.com/verbit-ai/verbit-streaming-cpp-sdk/releases/tag/v1.1.3) (2026-01-23)
 
