@@ -339,7 +339,7 @@ void WebSocketStreamingClient::run_keepalive()
 	if (env_ptr != nullptr) {
 		int env_i = atoi(env_ptr);
 		if (env_i > 0) {
-			keepalive_timeout_seconds = atoi(env_ptr);
+			keepalive_timeout_seconds = env_i;
 		}
 	}
 
