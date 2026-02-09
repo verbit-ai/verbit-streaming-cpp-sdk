@@ -58,12 +58,12 @@ public:
 	/// Return the WebSocket complete URL (with parameters).
 	const std::string ws_full_url();
 
-	/// Return the number of seconds to retry connecting to the WebSocket server before giving up.
-	/// Retry uses random exponential backoff.
+	/// Return the number of seconds for the **initial** WebSocket connect retry backoff.
+	/// Retry uses a backoff time that is a multiple of this value (`max_` is a misnomer).
 	constexpr double max_connection_retry_seconds() { return _max_conn_retry; }
 
-	/// Set the number of seconds to retry connecting to the WebSocket server before giving up.
-	/// Retry uses random exponential backoff.
+	/// Set the number of seconds for the **initial** WebSocket connect retry backoff.
+	/// Retry uses a backoff time that is a multiple of this value (`max_` is a misnomer).
 	void max_connection_retry_seconds(double seconds) { _max_conn_retry = seconds; }
 
 	/// Return the SSL certificate verification behavior.
