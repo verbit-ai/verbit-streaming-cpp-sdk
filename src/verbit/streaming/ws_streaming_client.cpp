@@ -337,7 +337,10 @@ void WebSocketStreamingClient::run_keepalive()
 	int keepalive_timeout_seconds = 30;
 	char *env_ptr = getenv("VERBIT_KEEPALIVE_SECONDS");
 	if (env_ptr != nullptr) {
-		keepalive_timeout_seconds = atoi(env_ptr);
+		int env_i = atoi(env_ptr);
+		if (env_i > 0) {
+			keepalive_timeout_seconds = atoi(env_ptr);
+		}
 	}
 
 	while (!_state.is_final() ) {
