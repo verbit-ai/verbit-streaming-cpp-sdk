@@ -426,10 +426,16 @@ void WebSocketStreamingClient::on_fail(websocketpp::connection_hdl hdl)
 		// connect to the WebSocket server (subsequent retry)
 		websocketpp::lib::error_code ec;
 		_ws_con = _ws_endpoint.get_connection(ws_full_url(), ec);
+		auto still_opening = (_state.get() == ServiceState::state_opening);
 		if (ec) {
 			write_alog("get_connection error", ec.message());
 			websocketpp::lib::error_code transport_ec = _ws_con->get_transport_ec();
 			write_alog("transport-specific get_connection error", transport_ec.message());
+			_error_code = _ws_con->get_local_close_code();
+			_service_error = _ws_con->get_local_close_reason();
+			// fall through to final `state_fail`
+		} else if (!still_opening) {
+			write_alog("WebSocket", "not requeuing connect in on_fail: state no longer opening");
 			_error_code = _ws_con->get_local_close_code();
 			_service_error = _ws_con->get_local_close_reason();
 			// fall through to final `state_fail`
