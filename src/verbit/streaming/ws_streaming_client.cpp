@@ -444,7 +444,11 @@ void WebSocketStreamingClient::on_fail(websocketpp::connection_hdl hdl)
 		}
 	}
 
-	_state.change_if(ServiceState::state_fail, ServiceState::state_opening, true);
+	// "If `stop_stream()` is called during the retry phase (either by the keepalive thread timing out
+	// or by explicit user call), the state becomes `state_closing`." So here we transform either case
+	// to `state_fail`.
+	_state.change_if(ServiceState::state_fail, ServiceState::state_opening, false);
+	_state.change_if(ServiceState::state_fail, ServiceState::state_closing, false);
 
 	wspp_client::connection_ptr con = _ws_endpoint.get_con_from_hdl(hdl);
 
